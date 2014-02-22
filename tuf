@@ -1,0 +1,17 @@
+#!/bin/bash
+#
+# TUF - track used files by LD_PRELOADING wrappers to
+#           standard file access functions (open,exec)
+# 
+# tuf - run process under tuf
+#
+# tuf output goes to .tuf-<pid>.txt
+#
+ 
+pwd="$(pwd)"
+export TUF_FILE="$(pwd)/.tuf-$$.txt" 
+
+echo "tuf: note, logging file access to $TUF_FILE" >&2
+export LD_PRELOAD="$(pwd)/libtuf.so"
+exec "$@"
+

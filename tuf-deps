@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+#
+# TUF - track used files by LD_PRELOADING wrappers to
+#           standard file access functions (open,exec)
+# 
+# tuf-deps - analyze what packages your toolchain depends
+#
+# example:
+#   $ tuf -o mytuf.txt make
+#   $ tuf ,mytuf.txt
+#   system-dpkg  libc6-dev:amd64
+#   system-dpkg  libgcc-4.8-dev:amd64
+#   system-portz /home/foo/site/lib/portz/foo.PKGINFO
+#   unknown-dep:     /usr/bin/uname
+
+
+##
+## tuf-deps
+##
+
+PNAME=tuf-deps
+
+eval `bashfoo --eval-out`
+
+bashfoo_require path
+bashfoo_require temp
+
+readonly sorted_input_tmp="$(bashfoo.mktemp)"
+readonly created_files_tmp="$(bashfoo.mktemp)"
+readonly not_created="$(bashfoo.mktemp)"
+
+sort -u "$@" > "$sorted_input_tmp"
+awk '/creat/ {print $2}' "$sorted_input_tmp" | sort -u > "$created_files_tmp"
+
+grep --invert-match --fixed-strings --file "$created_files_tmp" "$sorted_input_tmp" > "$not_created"
+
+awk '{print $2}' $not_created | xargs dpkg -S
+
