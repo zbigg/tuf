@@ -7,7 +7,7 @@
 #
 # example:
 #   $ tuf -o mytuf.txt make
-#   $ tuf ,mytuf.txt
+#   $ tuf mytuf.txt
 #   system-dpkg  libc6-dev:amd64
 #   system-dpkg  libgcc-4.8-dev:amd64
 #   system-portz /home/foo/site/lib/portz/foo.PKGINFO
@@ -18,6 +18,16 @@
 ## tuf-deps
 ##
 
+show_help()
+{
+    cat $BASH_SOURCE | egrep '^##( |$)' | cut -c3-
+}
+
+add_prefix()
+{
+    local prefix="$1"
+    awk -v prefix="$prefix" '{ printf("%s%s\n",prefix,$0);}'
+}
 PNAME=tuf-deps
 
 eval `bashfoo --eval-out`
@@ -25,14 +35,89 @@ eval `bashfoo --eval-out`
 bashfoo_require path
 bashfoo_require temp
 
+while [ -n "$1" ] ; do
+    if   [ "$1" = -h -o "$1" = --help ] ; then
+        show_help
+        exit 0
+    elif [ "$1" = -c -o "$1" = --command ] ; then
+        [ -z "$2" ] && { echo "$0: $1 option needs argument: file" >&2 ; exit 1; }
+        command=$1
+        shift
+        shift
+    elif [ "$1" = -- ] ; then
+        shift
+        break
+    else
+        break
+    fi
+done
+if [ -n "$command" ] ; then
+    echo "$0: command execution not implemented"
+    exit 1
+fi
+
 readonly sorted_input_tmp="$(bashfoo.mktemp)"
 readonly created_files_tmp="$(bashfoo.mktemp)"
-readonly not_created="$(bashfoo.mktemp)"
+readonly files_to_analyze="$(bashfoo.mktemp)"
+readonly portz_find_pkg_out="$(bashfoo.mktemp)"
 
-sort -u "$@" > "$sorted_input_tmp"
-awk '/creat/ {print $2}' "$sorted_input_tmp" | sort -u > "$created_files_tmp"
+filter_out_excludes() {
+    egrep -v "(^creat)|(/home/zagorzbi/fxp/rhel6_tweaking/)"
+}
 
-grep --invert-match --fixed-strings --file "$created_files_tmp" "$sorted_input_tmp" > "$not_created"
+cat "$@" |
+    filter_out_excludes |
+    awk '{print $2}' |
+    sort -u > "$files_to_analyze"
 
-awk '{print $2}' $not_created | xargs dpkg -S
+#grep --invert-match --fixed-strings --file "$created_files_tmp" "$sorted_input_tmp" > "$not_created"
 
+#cat "$files_to_analyze"
+use_dpkg_db=0
+use_rpm_db=1
+use_portz_db=1
+
+not_known_rpm="$(bashfoo.mktemp)"
+some_files_not_known=0
+while read file ; do
+    known=0
+    if [ -d "$file" ]; then
+        # we ignore folders
+        continue
+    elif [ ! -f "$file" ] ; then
+        # not a regular file ... ignore
+        continue
+    fi
+
+    #
+    if [ $known = 0 -a "$use_dpkg_db" = 1 ] ; then
+        true
+    fi
+    if [ $known = 0 -a "$use_rpm_db" = 1 ] ; then
+        rpm_output="$(rpm -qf $file)"
+        if echo "$rpm_output" | grep -q "is not owned by any package" ; then
+            echo "$file" > "$not_known_rpm"
+        else
+            known=1
+            echo "$file rpm $rpm_output /"
+        fi
+    fi
+    if [ $known = 0 -a "$use_portz_db" = 1 ] ; then
+        /home/zagorzbi/projects/portz/portz_find_pkg $file > "$portz_find_pkg_out"
+        read file2 name version root < "$portz_find_pkg_out"
+        if [ -n "$name" -a "$version" != - ] ; then
+            echo "$file portz $name-$version $root"
+            known=1
+        elif [ -n "$name" ] ; then
+            echo "$file portz $name $root"
+            known=1
+        fi
+    fi
+    if [ $known = 0 ] ; then
+        echo "$file unknown unknown unknown"
+        some_files_not_known=1
+    fi
+#    exit
+done < $files_to_analyze
+
+exit $some_files_not_known

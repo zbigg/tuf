@@ -1,17 +1,47 @@
-#!/bin/bash
-#
-# TUF - track used files by LD_PRELOADING wrappers to
-#           standard file access functions (open,exec)
-# 
-# tuf - run process under tuf
-#
-# tuf output goes to .tuf-<pid>.txt
-#
- 
-pwd="$(pwd)"
-export TUF_FILE="$(pwd)/.tuf-$$.txt" 
+#!/usr/bin/env bash
+##
+## TUF - track used files by LD_PRELOADING wrappers to
+##           standard file access functions (open,exec)
+## usage
+##    tuf COMMAND - output goes to ./.tuf-<pid>.txt
+##    tuf -o file COMMAND
+##
 
-echo "tuf: note, logging file access to $TUF_FILE" >&2
-export LD_PRELOAD="$(pwd)/libtuf.so"
+show_help()
+{
+    cat $BASH_SOURCE | egrep '^##( |$)' | cut -c3-
+}
+readonly tuf_libdir="$(dirname $BASH_SOURCE)"
+
+while [ -n "$1" ] ; do
+    if   [ "$1" = -h -o "$1" = --help ] ; then
+        show_help
+        exit 0
+    elif [ "$1" = -o -o "$1" = --output ] ; then
+        [ -z "$2" ] && { echo "$0: $1 option needs argument: file" >&2 ; exit 1; }
+        TUF_FILE=$2
+        shift
+        shift
+    elif [ "$1" = -- ] ; then
+        shift
+        break
+    else
+        break
+    fi
+done
+
+if [ -z "$1" ] ; then
+    echo "$0: no command given" >&2 
+    show_help
+    exit 1
+fi
+
+if [ -z "$TUF_FILE" ] ; then
+    TUF_FILE="$(pwd)/.tuf-$$.txt" 
+    echo "tuf: note, logging file access to $TUF_FILE" >&2
+fi
+export TUF_FILE
+
+export LD_PRELOAD="${tuf_libdir}/libtuf.so"
 exec "$@"
 

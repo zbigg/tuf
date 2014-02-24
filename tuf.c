@@ -228,7 +228,7 @@ int execv(const char *path, char *const argv[])
     }
 
     if( access(path, X_OK) == 0) {
-        tuf_event("exec", file);
+        tuf_event("exec", path);
     }
     return real_execv(path, argv);
 }
