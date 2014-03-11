@@ -5,14 +5,32 @@
 # 
 # tuf-deps - analyze what packages your toolchain depends
 #
+# options:
+#    -x  PATTERN
+#    --exclude PATTERN   -- exclude files matching PATTERN
+#
+#    --output_mode MODE  -- select output mode
+#
+# output modes
+#   file_list (default): outputs space separate tuple: file packager_type package root
+#
+#   package_list: files agreegated on "packager_type:package" string
+#
 # example:
 #   $ tuf -o mytuf.txt make
-#   $ tuf mytuf.txt
-#   system-dpkg  libc6-dev:amd64
-#   system-dpkg  libgcc-4.8-dev:amd64
-#   system-portz /home/foo/site/lib/portz/foo.PKGINFO
-#   unknown-dep:     /usr/bin/uname
-
+#   $ tuf-deps mytuf.txt
+#     /usr/include/unistd.h rpm glibc-headers-2.5-58 /
+#     /usr/include/bits/typesizes.h rpm glibc-headers-2.5-58 /
+#     /bin/rm rpm coreutils-5.97-23.el5_4.2 /
+#     /bin/bash rpm bash-3.2-24.el5 /
+#     (...)
+#
+#   $ tuf-deps --output-mode package_list mytuf.txt
+#     (...)
+#     rpm:bash-3.2-24.el5 /bin/bash
+#     rpm:coreutils-5.97-23.el5_4.2 (...) /bin/rm (...)
+#     rpm:glibc-headers-2.5-58 (...) /usr/include/unistd.h /usr/include/bits/typesizes.h (...)
+#     (...)
 
 ##
 ## tuf-deps
@@ -44,6 +62,11 @@ while [ -n "$1" ] ; do
     if   [ "$1" = -h -o "$1" = --help ] ; then
         show_help
         exit 0
+    elif [ "$1" = -O -o "$1" = --output-mode ] ; then
+        [ -z "$2" ] && { echo "$0: $1 option needs argument: file" >&2 ; exit 1; }
+        output_mode="$2"
+        shift
+        shift
     elif [ "$1" = -x -o "$1" = --exclude ] ; then
         [ -z "$2" ] && { echo "$0: $1 option needs argument: file" >&2 ; exit 1; }
         excludes="$excludes $2"
@@ -86,6 +109,7 @@ filter_out_excludes() {
     fi
     egrep -v "(^creat)$excludes_re"
 }
+
 #set -x
 cat "$@" |
     filter_out_excludes |
@@ -101,45 +125,93 @@ use_portz_db=1
 
 not_known_rpm="$(bashfoo.mktemp)"
 some_files_not_known=0
-while read file ; do
-    known=0
-    if [ -d "$file" ]; then
-        # we ignore folders
-        continue
-    elif [ ! -f "$file" ] ; then
-        # not a regular file ... ignore
-        continue
-    fi
 
+classify_files() {
+    # input: $files_to_analyze
+    # output:
+    #   tuple(file, packager_type, package, root)
+    # example:
+    #   /usr/include/asm/types.h rpm kernel-headers-2.6.18-238.el5 /
     #
-    if [ $known = 0 -a "$use_dpkg_db" = 1 ] ; then
-        true
-    fi
-    if [ $known = 0 -a "$use_rpm_db" = 1 ] ; then
-        rpm_output="$(rpm -qf $file)"
-        if echo "$rpm_output" | grep -q "is not owned by any package" ; then
-            echo "$file" > "$not_known_rpm"
-        else
-            known=1
-            echo "$file rpm $rpm_output /"
+    while read file ; do
+        known=0
+        if [ -d "$file" ]; then
+            # we ignore folders
+            continue
+        elif [ ! -f "$file" ] ; then
+            # not a regular file ... ignore
+            continue
         fi
-    fi
-    if [ $known = 0 -a "$use_portz_db" = 1 ] ; then
-        /home/zagorzbi/projects/portz/portz_find_pkg $file > "$portz_find_pkg_out"
-        read file2 name version root < "$portz_find_pkg_out"
-        if [ "$name" != - -a "$version" != - ] ; then
-            echo "$file portz $name-$version $root"
-            known=1
-        elif [ "$name" != - ] ; then
-            echo "$file portz $name $root"
-            known=1
+        file="$(readlink -f $file)"
+
+        #
+        if [ $known = 0 -a "$use_dpkg_db" = 1 ] ; then
+            true
         fi
-    fi
-    if [ $known = 0 ] ; then
-        echo "$file unknown unknown /"
-        some_files_not_known=1
-    fi
-#    exit
-done < $files_to_analyze
+        if [ $known = 0 -a "$use_rpm_db" = 1 ] ; then
+            rpm_output="$(rpm -qf $file)"
+            if echo "$rpm_output" | grep -q "is not owned by any package" ; then
+                echo "$file" > "$not_known_rpm"
+            else
+                known=1
+                echo "$file rpm $rpm_output /"
+            fi
+        fi
+        if [ $known = 0 -a "$use_portz_db" = 1 ] ; then
+            /home/zagorzbi/projects/portz/portz_find_pkg $file > "$portz_find_pkg_out"
+            read file2 name version root < "$portz_find_pkg_out"
+            if [ "$name" != - -a "$version" != - ] ; then
+                echo "$file portz $name-$version $root"
+                known=1
+            elif [ "$name" != - ] ; then
+                echo "$file portz $name $root"
+                known=1
+            fi
+        fi
+        if [ $known = 0 ] ; then
+            echo "$file unknown unknown /"
+            some_files_not_known=1
+        fi
+    #    exit
+    done < $files_to_analyze
+}
+agreegate_on_package()
+{
+    awk '
+        BEGIN {
+        }
+        // {
+            file=$1
+            packager_type=$2
+            package=$3
+            root=$4
+
+            type=sprintf("%s:%s", packager_type, package);
+            file_list = package_files[type];
+            if( file_list ) {
+                file_list=sprintf("%s %s", file_list, file);
+            } else {
+                file_list=file;
+            }
+            package_files[type] = file_list;
+        }
+        END {
+            for(pkg_type in package_files) {
+                printf("%s %s\n", pkg_type, package_files[pkg_type] );
+            }
+        }
+    '
+}
+
+output_mode="${output_mode-file_list}"
+
+if   [ "$output_mode" = file_list ] ; then
+    classify_files
+elif [ "$output_mode" = package_list ] ; then
+    classify_files | agreegate_on_package
+else
+    log_info "error: unknown output_mode($output_mode)"
+    exit 1
+fi
 
 exit $some_files_not_known
