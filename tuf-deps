@@ -35,7 +35,8 @@
 ##
 ## tuf-deps
 ##
-PNAME=tuf-deps
+readonly PNAME=tuf-deps
+readonly tuf_bindir="$(dirname $BASH_SOURCE)"
 
 show_help()
 {
@@ -51,7 +52,6 @@ add_prefix()
     local prefix="$1"
     awk -v prefix="$prefix" '{ printf("%s%s\n",prefix,$0);}'
 }
-PNAME=tuf-deps
 
 eval `bashfoo --eval-out`
 
@@ -74,7 +74,7 @@ while [ -n "$1" ] ; do
         shift
     elif [ "$1" = -c -o "$1" = --command ] ; then
         [ -z "$2" ] && { echo "$0: $1 option needs argument: file" >&2 ; exit 1; }
-        command=$1
+        command=$2
         shift
         shift
     elif [ "$1" = -- ] ; then
@@ -84,10 +84,6 @@ while [ -n "$1" ] ; do
         break
     fi
 done
-if [ -n "$command" ] ; then
-    echo "$0: command execution not implemented"
-    exit 1
-fi
 
 readonly sorted_input_tmp="$(bashfoo.mktemp)"
 readonly created_files_tmp="$(bashfoo.mktemp)"
@@ -110,11 +106,19 @@ filter_out_excludes() {
     egrep -v "(^creat)$excludes_re"
 }
 
+if [ -n "$command" ] ; then
+    my_tuf_file="$(bashfoo.mktemp)"
+    input_files="$my_tuf_file"
+    ${tuf_bindir}/tuf -o "$my_tuf_file" $command
+else
+    input_files="$@"
+fi
 #set -x
-cat "$@" |
+cat $input_files |
     filter_out_excludes |
     awk '{print $2}' |
     sort -u > "$files_to_analyze"
+
 
 #grep --invert-match --fixed-strings --file "$created_files_tmp" "$sorted_input_tmp" > "$not_created"
 
