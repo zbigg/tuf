@@ -2,39 +2,46 @@
 #
 # TUF - track used files by LD_PRELOADING wrappers to
 #           standard file access functions (open,exec)
-# 
-# tuf-deps - analyze what packages your toolchain depends
-#
-# options:
-#    -x  PATTERN
-#    --exclude PATTERN   -- exclude files matching PATTERN
-#
-#    --output_mode MODE  -- select output mode
-#
-# output modes
-#   file_list (default): outputs space separate tuple: file packager_type package root
-#
-#   package_list: files agreegated on "packager_type:package" string
-#
-# example:
-#   $ tuf -o mytuf.txt make
-#   $ tuf-deps mytuf.txt
-#     /usr/include/unistd.h rpm glibc-headers-2.5-58 /
-#     /usr/include/bits/typesizes.h rpm glibc-headers-2.5-58 /
-#     /bin/rm rpm coreutils-5.97-23.el5_4.2 /
-#     /bin/bash rpm bash-3.2-24.el5 /
-#     (...)
-#
-#   $ tuf-deps --output-mode package_list mytuf.txt
-#     (...)
-#     rpm:bash-3.2-24.el5 /bin/bash
-#     rpm:coreutils-5.97-23.el5_4.2 (...) /bin/rm (...)
-#     rpm:glibc-headers-2.5-58 (...) /usr/include/unistd.h /usr/include/bits/typesizes.h (...)
-#     (...)
 
+## 
+## tuf-deps - analyze what packages your toolchain depends
 ##
-## tuf-deps
+## usage:
+##    tuf-deps [options] [TUF-OUTPUT-FILES]  - analyze previously collected trackings
+##    tuf-deps [options] --command 'COMMAND' - analyze particular COMMAND
 ##
+## options:
+##    -x  PATTERN
+##    --exclude PATTERN   -- exclude files matching PATTERN
+##
+##    --output_mode MODE  -- select output mode
+##
+##    -c COMMAND
+##    --command COMMAND   -- execute COMMAND and analyze deps of 
+##                           this command
+##
+## output modes
+##   file_list (default): outputs space separate tuple: file packager_type package root
+##
+##   package_list: files agreegated on "packager_type:package" string
+##
+## example:
+##   $ tuf -o mytuf.txt make
+##   $ tuf-deps mytuf.txt
+##     /usr/include/unistd.h rpm glibc-headers-2.5-58 /
+##     /usr/include/bits/typesizes.h rpm glibc-headers-2.5-58 /
+##     /bin/rm rpm coreutils-5.97-23.el5_4.2 /
+##     /bin/bash rpm bash-3.2-24.el5 /
+##     (...)
+##
+##   $ tuf-deps --output-mode package_list mytuf.txt
+##     (...)
+##     rpm:bash-3.2-24.el5 /bin/bash
+##     rpm:coreutils-5.97-23.el5_4.2 (...) /bin/rm (...)
+##     rpm:glibc-headers-2.5-58 (...) /usr/include/unistd.h /usr/include/bits/typesizes.h (...)
+##     (...)
+
+
 readonly PNAME=tuf-deps
 readonly tuf_bindir="$(dirname $BASH_SOURCE)"
 
@@ -113,16 +120,13 @@ if [ -n "$command" ] ; then
 else
     input_files="$@"
 fi
-#set -x
+
 cat $input_files |
     filter_out_excludes |
     awk '{print $2}' |
     sort -u > "$files_to_analyze"
 
 
-#grep --invert-match --fixed-strings --file "$created_files_tmp" "$sorted_input_tmp" > "$not_created"
-
-#cat "$files_to_analyze"
 use_dpkg_db=0
 use_rpm_db=1
 use_portz_db=1

@@ -1,11 +1,24 @@
 #!/usr/bin/env bash
+#
+# TUF - track used files by LD_PRELOADING wrappers to
+#           standard file access functions (open,exec)
+
 ##
-## TUF - track used files by LD_PRELOADING wrappers to
-##           standard file access functions (open,exec)
-## usage
+## tuf - track files are used by your command/scripts/programs
+##
 ##    tuf COMMAND - output goes to ./.tuf-<pid>.txt
 ##    tuf -o file COMMAND
 ##
+## example:
+##
+##   $ ./tuf 'cat /etc/hosts | grep local'
+##   tuf: note, logging file access to /home/zagorzbi/projects/priv/tuf/.tuf-13507.txt
+##   $ cat /home/zagorzbi/projects/priv/tuf/.tuf-13507.txt
+##   open /dev/tty
+##   exec /bin/cat
+##   exec /bin/grep
+##   open /etc/hosts
+
 
 show_help()
 {
