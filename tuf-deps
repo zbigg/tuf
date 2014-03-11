@@ -157,7 +157,12 @@ classify_files() {
             true
         fi
         if [ $known = 0 -a "$use_rpm_db" = 1 ] ; then
-            rpm_output="$(rpm -qf $file)"
+            # TBD, rpm may return multiple lines for one file!
+            #   $ rpm -qf /usr/include/ncurses/curses.h
+            #   ncurses-devel-5.5-24.20060715
+            #   ncurses-devel-5.5-24.20060715
+            # for now, we will fix it by choosing first one :)
+            rpm_output="$(rpm -qf $file | head -n1)"
             if echo "$rpm_output" | grep -q "is not owned by any package" ; then
                 echo "$file" > "$not_known_rpm"
             else
