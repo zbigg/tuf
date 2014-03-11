@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+#
+# tuf-test
+#
+#  Helper for
+readonly PNAME=tuf-deps
+readonly tuf_bindir="$(dirname $BASH_SOURCE)"
+
+readonly test_name="$1"
+readonly test_command="$2"
+
+readonly tuf_file="${test_name}-tuf-test.tuf.txt"
+readonly tuf_classified="${test_name}-tuf-test.classified.txt"
+readonly tuf_package_list="${test_name}-tuf-test.package_list.txt"
+
+(
+    echo "tuf-test: test_name=$test_name"
+    echo "tuf-test: test_command=$test_command"
+    echo "tuf-test: time=$(date)"
+    echo "tuf-test: host=$(hostname)"
+    echo "tuf-test: -- START TEST tuf $test_command"
+
+    rm -rf ""
+    # execute COMMAND
+    (
+        tuf_file_abs="$(readlink -f "${tuf_file}")"
+        #if [ -n "${test_dir}" ] ; then 
+        #    cd ${test_dir}
+        #fi
+        ${tuf_bindir}/tuf -o ${tuf_file_abs} "$test_command"
+    ) 2>&1 | tee "${test_name}-tuf-test-execlog.txt"
+    r="${PIPESTATUS[0]}"
+    echo "tuf-test: -- END TEST (result=$r)"
+    echo "tuf-test: tuf log: ${tuf_file}"
+
+    # summarize
+    echo "tuf-test: $(cat     ${tuf_file} | wc -l ) events logged"
+    echo "tuf-test: $(sort -u ${tuf_file} | wc -l ) unique events logged"
+    echo "tuf-test: $(awk '{print $2}' ${tuf_file} | sort -u | wc -l ) unique files logged"
+
+    echo "tuf-test: -- classyfying files:"
+    # --output-mode package_list
+    ${tuf_bindir}/tuf-deps --exclude "$(pwd)" ${tuf_file} > "${tuf_classified}"
+    echo "tuf-test: -- classification done, see (${tuf_classified})"
+    echo "tuf-test: $(awk '{print $1}' ${tuf_classified} | wc -l ) files found"
+    echo "tuf-test: $(awk '{print $2}' ${tuf_classified} | grep -v unknown | wc -l ) known files found"
+    echo "tuf-test: $(awk '{print $2}' ${tuf_classified} | grep unknown | wc -l ) unknown files found"
+    while read file packager_type package root ; do
+        if [ "$packager_type" != unknown ] ; then
+            if [ "$root" != / ] ; then
+                echo "tuf-test: used package: $packager_type $package (at $root)"
+            else
+                echo "tuf-test: used package: $packager_type $package"
+            fi
+        else
+            echo "tuf-test: unknown file: $file"
+        fi
+    done < "${tuf_classified}" | sort -u
+    exit "$r"
+) 2>&1 | tee "${test_name}-tuf-test.log.txt"
+
+r="${PIPESTATUS[0]}"
+exit "$r"
