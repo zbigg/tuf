@@ -17,12 +17,17 @@
 ##
 ## tuf-deps
 ##
+PNAME=tuf-deps
 
 show_help()
 {
     cat $BASH_SOURCE | egrep '^##( |$)' | cut -c3-
 }
 
+log_info()
+{
+    echo "$PNAME: $*" >&2
+}
 add_prefix()
 {
     local prefix="$1"
@@ -39,6 +44,11 @@ while [ -n "$1" ] ; do
     if   [ "$1" = -h -o "$1" = --help ] ; then
         show_help
         exit 0
+    elif [ "$1" = -x -o "$1" = --exclude ] ; then
+        [ -z "$2" ] && { echo "$0: $1 option needs argument: file" >&2 ; exit 1; }
+        excludes="$excludes $2"
+        shift
+        shift
     elif [ "$1" = -c -o "$1" = --command ] ; then
         [ -z "$2" ] && { echo "$0: $1 option needs argument: file" >&2 ; exit 1; }
         command=$1
@@ -62,9 +72,21 @@ readonly files_to_analyze="$(bashfoo.mktemp)"
 readonly portz_find_pkg_out="$(bashfoo.mktemp)"
 
 filter_out_excludes() {
-    egrep -v "(^creat)|(/home/zagorzbi/fxp/rhel6_tweaking/)"
+    local excludes_re=""
+    for ex in $excludes ; do
+        log_info "exluding ${ex}"
+        if [ -z "$excludes_re" ] ; then
+            excludes_re="(${ex})"
+        else
+            excludes_re="${exludes_re}|(${ex})"
+        fi
+    done
+    if [ -n "${excludes_re}" ] ; then
+        excludes_re="|($excludes_re)"
+    fi
+    egrep -v "(^creat)$excludes_re"
 }
-
+#set -x
 cat "$@" |
     filter_out_excludes |
     awk '{print $2}' |
@@ -105,16 +127,16 @@ while read file ; do
     if [ $known = 0 -a "$use_portz_db" = 1 ] ; then
         /home/zagorzbi/projects/portz/portz_find_pkg $file > "$portz_find_pkg_out"
         read file2 name version root < "$portz_find_pkg_out"
-        if [ -n "$name" -a "$version" != - ] ; then
+        if [ "$name" != - -a "$version" != - ] ; then
             echo "$file portz $name-$version $root"
             known=1
-        elif [ -n "$name" ] ; then
+        elif [ "$name" != - ] ; then
             echo "$file portz $name $root"
             known=1
         fi
     fi
     if [ $known = 0 ] ; then
-        echo "$file unknown unknown unknown"
+        echo "$file unknown unknown /"
         some_files_not_known=1
     fi
 #    exit
