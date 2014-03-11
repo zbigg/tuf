@@ -24,7 +24,7 @@ show_help()
 {
     cat $BASH_SOURCE | egrep '^##( |$)' | cut -c3-
 }
-readonly tuf_libdir="$(dirname $BASH_SOURCE)"
+readonly tuf_libdir="$(readlink -f $(dirname $BASH_SOURCE))"
 
 while [ -n "$1" ] ; do
     if   [ "$1" = -h -o "$1" = --help ] ; then
@@ -50,9 +50,10 @@ if [ -z "$1" ] ; then
 fi
 
 if [ -z "$TUF_FILE" ] ; then
-    TUF_FILE="$(pwd)/.tuf-$$.txt" 
+    TUF_FILE=".tuf-$$.txt" 
     echo "tuf: note, logging file access to $TUF_FILE" >&2
 fi
+TUF_FILE="$(readlink -f ${TUF_FILE})"
 export TUF_FILE
 
 export LD_PRELOAD="${tuf_libdir}/libtuf.so"
