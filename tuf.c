@@ -4,8 +4,12 @@
 
     tuf.c - source for libtuf.so
 */
+
+#ifdef linux
+/* RTLD_NEXT needs those under linux */
 #define _GNU_SOURCE
 #define __USE_GNU       // for RTLD_NEXT in dlfcn.h
+#endif
 #include <dlfcn.h>  	// for ::dlsym
 #include <stdio.h>      // for fprintf, stderr
 #include <stdlib.h>     // for abort
@@ -58,7 +62,14 @@ static void tuf_event(const char* event, const char* path)
         char buf[1024];
         if (path[0] != '/' ) {
             // relative
-            snprintf(buf, 1024, "%s %s/%s\n", event, get_current_dir_name(), path);
+#ifdef linux
+            const char* cwd = get_current_dir_name();
+#else
+            char cwd[1024];
+            getcwd(cwd, sizeof(cwd));
+            cwd[sizeof(cwd)-1] = 0;
+#endif
+            snprintf(buf, 1024, "%s %s/%s\n", event, cwd, path);
         } else {
             snprintf(buf, 1024, "%s %s\n", event, path);
         }
@@ -219,6 +230,7 @@ int execlp(const char *file, const char *arg, ...)
 int execle(const char *path, const char *arg, ... /*, char * const envp[]*/)
 {
     tuf_abort("execle not implemented");
+    return -1;
 }
 
 int execv(const char *path, char *const argv[])

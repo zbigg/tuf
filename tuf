@@ -24,7 +24,21 @@ show_help()
 {
     cat $BASH_SOURCE | egrep '^##( |$)' | cut -c3-
 }
-readonly tuf_libdir="$(readlink -f $(dirname $BASH_SOURCE))"
+
+abspath() (
+    local target="$1"
+
+    if [ -d "$target" ] ; then
+        cd $target
+        pwd
+    else
+        local name="$(basename "$target")"
+        cd "$(dirname "$target")"
+        echo "$(pwd)/${name}"
+    fi
+)
+
+readonly tuf_libdir="$(abspath $(dirname $BASH_SOURCE))"
 
 while [ -n "$1" ] ; do
     if   [ "$1" = -h -o "$1" = --help ] ; then
@@ -53,11 +67,15 @@ if [ -z "$TUF_FILE" ] ; then
     TUF_FILE=".tuf-$$.txt" 
     echo "tuf: note, logging file access to $TUF_FILE" >&2
 fi
-TUF_FILE="$(readlink -f ${TUF_FILE})"
+TUF_FILE="$(abspath ${TUF_FILE})"
 export TUF_FILE
 
-export LD_PRELOAD="${tuf_libdir}/libtuf.so"
-
+if [ "$(uname)" = Darwin ]; then
+    export DYLD_INSERT_LIBRARIES="${tuf_libdir}/libtuf.dylib"
+    export DYLD_FORCE_FLAT_NAMESPACE=1
+else
+    export LD_PRELOAD="${tuf_libdir}/libtuf.so"
+fi
 # note:
 # previously it was:
 #  exec "$@"
