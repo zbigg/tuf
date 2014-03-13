@@ -59,6 +59,24 @@ add_prefix()
     local prefix="$1"
     awk -v prefix="$prefix" '{ printf("%s%s\n",prefix,$0);}'
 }
+abspath() (
+    local target="$1"
+
+    if [ -d "$target" ] ; then
+        cd $target
+        pwd
+    else
+        local name="$(basename "$target")"
+        local dir="$(dirname "$target")"
+        if [ -d "${dir}" ] ; then
+            cd "${dir}"
+            echo "$(pwd)/${name}"
+        else
+            echo "abspath: parent dir: ${dir} doesn't exist"
+            return 1
+        fi
+    fi
+)
 
 eval `bashfoo --eval-out`
 
@@ -130,8 +148,11 @@ cat $input_files |
 use_dpkg_db=0
 use_rpm_db=1
 use_portz_db=1
+use_osx_pkg_db=0
 
 not_known_rpm="$(bashfoo.mktemp)"
+osx_pkg_out="$(bashfoo.mktemp)"
+
 some_files_not_known=0
 
 classify_files() {
@@ -150,7 +171,7 @@ classify_files() {
             # not a regular file ... ignore
             continue
         fi
-        file="$(readlink -f $file)"
+        file="$(abspath $file)"
 
         #
         if [ $known = 0 -a "$use_dpkg_db" = 1 ] ; then
@@ -168,6 +189,20 @@ classify_files() {
             else
                 known=1
                 echo "$file rpm $rpm_output /"
+            fi
+        fi
+        if [ $known = 0 -a "$use_osx_pkg_db" = 1 ] ; then
+            pkgutil --file-info "$file" > "$osx_pkg_out"
+            root="$(grep volume: "$osx_pkg_out" | cut -d: -f2-)"
+            pkgid="$(grep pkgid: "$osx_pkg_out" | cut -d: -f2-)"
+            pkgversion="$(grep pkg-version: "$osx_pkg_out" | cut -d: -f2-)"
+
+            if [ -n "$pkgid" -a -n "$pkgversion" ] ; then
+                echo "$file pkg $pkgid-$pkgversion $root"
+                known=1
+            elif [ -n "$pkgid" ] ; then
+                echo "$file pkg $pkgid $root"
+                known=1
             fi
         fi
         if [ $known = 0 -a "$use_portz_db" = 1 ] ; then
