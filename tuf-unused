@@ -1,0 +1,119 @@
+#!/usr/bin/env bash
+#
+# TUF - track used files by LD_PRELOADING wrappers to
+#           standard file access functions (open,exec)
+
+## 
+## tuf-unused - show unused files under specified TUF load
+##
+## usage:
+##    tuf-unused TUF-FILE         - show "not used files" in current directory
+##    tuf-unused TUF-FILE DIR     - show "not used files" in DIR
+##    tuf-unused TUF-FILE DIR [find options] - same as above, but pass
+##                                - optiions to find command
+##    tuf-unused TUF-FILE -f FILES - same "not used files" but list of queried files is 
+##                                  from FILES (each line, a file, not trailing spaces, commets 
+##                                  etc)
+##
+## options:
+##    -l  -- act as lint/warning generator i.e show warning about each unused file
+##
+## tuf-unused helps you check which file are not used by for example build & test
+## process, so one can clean-up source tree from legacy leftovers.
+##
+## typical usage & example:
+##    checkout and enter source folder
+##    find . | grep -v .git > .clean-checkout-filelist.txt
+##    tuf -o full-build.tuf autoconf
+##    tuf -o full-build.tuf ./configure
+##    tuf -o full-build.tuf make
+##    tuf -o full-build.tuf make check
+##    tuf -o full-build.tuf make rpm-dist
+##    tuf -o full-build.tuf make some-other-dist
+##    tuf -o full-build.tuf make src-dist
+##    tuf-unused full-build.tuf -f .clean-checkout-filelist.txt
+##
+## output
+##   normal mode:  line by line list of unused files 
+##   lint mode:    warning about unused file in list on stderr
+##
+
+
+readonly PNAME=tuf-unused
+readonly tuf_bindir="$(dirname $BASH_SOURCE)"
+
+show_help()
+{
+    cat $BASH_SOURCE | egrep '^##( |$)' | cut -c3-
+}
+
+log_info()
+{
+    echo "$PNAME: $*" >&2
+}
+add_prefix()
+{
+    local prefix="$1"
+    awk -v prefix="$prefix" '{ printf("%s%s\n",prefix,$0);}'
+}
+
+eval `bashfoo --eval-out`
+
+bashfoo_require path
+bashfoo_require temp
+
+while [ -n "$1" ] ; do
+    if   [ "$1" = -h -o "$1" = --help ] ; then
+        show_help
+        exit 0
+    elif [ "$1" = -l  ] ; then ## - small L
+        output_mode="lint"
+        shift
+    elif [ "$1" = -f ] ; then
+        [ -z "$2" ] && { echo "$0: $1 option needs argument: file" >&2 ; exit 1; }
+        file_list_file="$2"
+        shift
+        shift
+    elif [ -z "$tuf_file" ] ; then
+        tuf_file=$1
+        shift
+    elif [ -z "$tuf_find_dir" ] ; then
+        tuf_find_dir=$1
+        shift
+    else
+        tuf_find_options="$tuf_find_options $1"
+        shift
+    fi
+done
+
+present_results() {
+    if [ "$output_mode" = lint ] ; then
+        while read file ; do
+            echo "tuf-unused: warning file $file is unused" >&2
+        done
+    else
+        cat
+    fi
+}
+if [ -z "$file_list_file" -a -z "$tuf_find_dir" ] ; then
+    tuf_find_dir="$(pwd)"
+elif [ -n "$tuf_find_dir" ] ; then
+    tuf_find_dir="$(abspath $tuf_find_dir)"
+fi
+
+readonly used_temp="$(bashfoo.mktemp)"
+
+sort -u "$tuf_file" | awk '{print $2}' | xargs -n1 readlink -f > "${used_temp}"
+
+(
+    if [ -n "$file_list_file" ] ; then
+        while read file ; do
+            if [ -f $file ] ; then
+                echo "$(abspath $file)"
+            fi
+        done < $file_list_file  | xargs -n1 readlink -f
+    elif [ -n "$tuf_find_dir" ] ; then
+        find "$tuf_find_dir" -type f $tuf_find_options
+    fi
+) | grep -xvf "${used_temp}" | present_results
+
