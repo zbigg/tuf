@@ -16,6 +16,8 @@
 #include <unistd.h>     // for getpid
 #include <errno.h>
 #include <fcntl.h>
+#include <sys/types.h>  // for S_IRUSR|S_IWUSR
+#include <sys/stat.h>
 #include <string.h>
 #include <dirent.h>
 #include <stdarg.h>    // for va_list, va_start,...
