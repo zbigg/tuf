@@ -291,3 +291,34 @@ int execvpe(const char *file, char *const argv[],
     return real_execvpe(file, argv, envp);
 }
 
+/*
+ * ANSI C API
+ * stdio 
+ */
+ 
+static FILE*  (*real_fopen)(const char *filename, const char* modes) = 0;
+FILE* fopen(const char* filename,
+            const char* modes)
+{
+    if( !real_fopen ) {
+        real_fopen = load_sym("fopen");
+    }
+    if( modes != 0 && 
+        (strchr(modes, 'w') != 0 ) ||
+        (strchr(modes, 'a') != 0 )) 
+    {
+        tuf_event("creat", filename);
+    } else {
+        tuf_event("open", filename);
+    }
+    return real_fopen(filename, modes);
+}
+
+#ifdef linux
+FILE* fopen64(const char * filename,
+             const char *modes)
+{
+    return fopen(filename, modes);
+}
+#endif
+
