@@ -20,7 +20,7 @@ readonly tuf_package_list="${test_name}-tuf-test.package_list.txt"
     echo "tuf-test: host=$(hostname)"
     echo "tuf-test: -- START TEST tuf $test_command"
 
-    rm -rf ""
+    rm -rf "${tuf_file}"
     # execute COMMAND
     (
         tuf_file_abs="$(readlink -f "${tuf_file}")"
