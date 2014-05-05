@@ -93,15 +93,11 @@ static int  (*real_execv)(const char *path, char *const argv[]) = 0;
 static int  (*real_execvp)(const char *file, char *const argv[]) = 0;
 static int  (*real_execvpe)(const char *file, char *const argv[], char *const envp[]) = 0;
 
-int open(const char *pathname, int flags, ...)
+int vopen(const char *pathname, int flags, int mode)
 {
     if( !real_open ) {
         real_open = load_sym("open");
     }
-    va_list ap;
-    va_start(ap, flags);
-    int mode = va_arg(ap, int);
-    va_end(ap);
     int result = real_open(pathname, flags, mode);
     if( result != -1 ) {
         if ( flags & (O_CREAT) != 0 ||
@@ -115,7 +111,25 @@ int open(const char *pathname, int flags, ...)
     }
     return result;
 }
+int open(const char *pathname, int flags, ...)
+{
+    va_list ap;
+    va_start(ap, flags);
+    const int mode = va_arg(ap, int);
+    va_end(ap);
+    return vopen(pathname, flags, mode);
+}
 
+#ifdef linux
+int open64(const char *pathname, int flags, ...)
+{
+    va_list ap;
+    va_start(ap, flags);
+    const int mode = va_arg(ap, int);
+    va_end(ap);
+    return vopen(pathname, flags, mode);
+}
+#endif
 int creat(const char *pathname, mode_t mode)
 {
     if( !real_creat ) {
@@ -127,6 +141,13 @@ int creat(const char *pathname, mode_t mode)
     }
     return result;
 }
+
+#ifdef linux
+int creat64(const char *pathname, mode_t mode)
+{
+    return creat(pathname, mode);
+}
+#endif
 
 DIR * opendir(const char* dirname)
 {
