@@ -206,7 +206,7 @@ classify_files() {
             fi
         fi
         if [ $known = 0 -a "$use_portz_db" = 1 ] ; then
-            /home/zagorzbi/projects/portz/portz_find_pkg $file > "$portz_find_pkg_out"
+            portz classify $file > "$portz_find_pkg_out"
             read file2 name version root < "$portz_find_pkg_out"
             if [ "$name" != - -a "$version" != - ] ; then
                 echo "$file portz $name-$version $root"
