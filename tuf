@@ -38,7 +38,7 @@ abspath() (
     fi
 )
 
-readonly tuf_libdir="$(abspath $(dirname $BASH_SOURCE))"
+readonly tuf_bindir="$(abspath $(dirname $BASH_SOURCE))"
 
 while [ -n "$1" ] ; do
     if   [ "$1" = -h -o "$1" = --help ] ; then
@@ -70,7 +70,24 @@ fi
 TUF_FILE="$(abspath ${TUF_FILE})"
 export TUF_FILE
 
-if [ "$(uname)" = Darwin ]; then
+readonly uname=$(uname)
+if [ "$uname" = Darwin ]; then
+    tuf_libname=libtuf.dylib
+else
+    tuf_libname=libtuf.so
+fi
+
+tuf_libdir="${tuf_bindir}/../lib/tuf"
+if [ ! -f "$tuf_libdir/$tuf_libname" ] ; then
+    if [ -f "$tuf_bindir/$tuf_libname" ] ; then
+        tuf_libdir="$tuf_bindir"
+    else
+        echo "$0: error unsable to find ${tuf_libname}, exiting" >&2
+        exit 2
+    fi
+fi
+
+if [ "$uname" = Darwin ]; then
     export DYLD_INSERT_LIBRARIES="${tuf_libdir}/libtuf.dylib"
     export DYLD_FORCE_FLAT_NAMESPACE=1
 else
